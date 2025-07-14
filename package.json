@@ -1,0 +1,35 @@
+{
+  "name": "coursegpt",
+  "version": "1.0.0",
+  "description": "AI-powered platform for course creation and management",
+  "main": "index.js",
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd backend && npm start"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-github-username/coursegpt.git"
+  },
+  "keywords": [
+    "ai",
+    "education",
+    "course-creation",
+    "react",
+    "nodejs",
+    "mongodb"
+  ],
+  "author": "Dev Karan Singh",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/DKSingh1604/coursegpt/issues"
+  },
+  "homepage": "https://github.com/DKSingh1604/coursegpt#readme",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
