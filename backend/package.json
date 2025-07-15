@@ -8,7 +8,7 @@
     "dev": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "Your Name",
+  "author": "Dev Karan Singh",
   "license": "ISC",
   "dependencies": {
     "@huggingface/inference": "^3.7.1",

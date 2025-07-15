@@ -63,7 +63,7 @@ export const updateCourse = async (courseId: string, courseData: Partial<Course>
   }
 };
 
-export const deleteCourse = async (courseId: string): Promise<{ success: boolean; data: {} }> => {
+export const deleteCourse = async (courseId: string): Promise<{ success: boolean; data: object }> => {
   try {
     const response = await axios.delete(`${API_URL}/${courseId}`, getAuthConfig());
     return response.data;
@@ -73,7 +73,9 @@ export const deleteCourse = async (courseId: string): Promise<{ success: boolean
   }
 };
 
-export const addModule = async (courseId: string, moduleData: any): Promise<CourseResponse> => {
+import { Module, Lesson } from "@/types/types";
+
+export const addModule = async (courseId: string, moduleData: Module): Promise<CourseResponse> => {
   try {
     const response = await axios.post(`${API_URL}/${courseId}/modules`, moduleData, getAuthConfig());
     return response.data;
@@ -83,7 +85,7 @@ export const addModule = async (courseId: string, moduleData: any): Promise<Cour
   }
 };
 
-export const addLesson = async (courseId: string, moduleId: string, lessonData: any): Promise<CourseResponse> => {
+export const addLesson = async (courseId: string, moduleId: string, lessonData: Lesson): Promise<CourseResponse> => {
   try {
     const response = await axios.post(`${API_URL}/${courseId}/modules/${moduleId}/lessons`, lessonData, getAuthConfig());
     return response.data;

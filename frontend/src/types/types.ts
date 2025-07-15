@@ -29,15 +29,27 @@ export interface AuthState {
 }
 
 // Course Types
+export interface LessonContent {
+  title?: string;
+  description?: string;
+  learningOutcomes?: string[];
+  keyConcepts?: string[];
+  activities?: string[];
+}
+
 export interface Lesson {
   _id?: string;
   title: string;
   content: string;
   resources: string[];
   order: number;
+  topic?: string;
   learningOutcomes?: string[];
   keyConcepts?: string[];
   activities?: string[];
+  // Backend specific fields
+  aiContent?: LessonContent;
+  editedContent?: LessonContent;
 }
 
 export interface Module {

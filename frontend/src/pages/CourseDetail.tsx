@@ -1,24 +1,54 @@
-import React, { useEffect, useState } from "react";
+import React, {
+  useEffect,
+  useState,
+} from "react";
 import { useParams } from "react-router-dom";
-import { getCourse } from "@/api/course";
+import {
+  getCourse,
+  updateCourse,
+} from "@/api/course";
 import { getProgress } from "@/api/progress";
+import { generateLessonContent as generateLessonContentAPI } from "@/api/ai";
 import { useToast } from "@/hooks/use-toast";
-import { Course, CourseProgress, Lesson, Module } from "@/types/types";
+import {
+  Course,
+  CourseProgress,
+  Lesson,
+  Module,
+} from "@/types/types";
 import { LessonTree } from "@/components/courses/LessonTree";
 import { CourseEditor } from "@/components/courses/CourseEditor";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, Edit, HistoryIcon, Loader2 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Clock,
+  Edit,
+  HistoryIcon,
+  Loader2,
+} from "lucide-react";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 
 const CourseDetail: React.FC = () => {
-  const { courseId } = useParams<{ courseId: string }>();
-  const [course, setCourse] = useState<Course | null>(null);
-  const [progress, setProgress] = useState<CourseProgress | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedModule, setSelectedModule] = useState(0);
-  const [selectedLesson, setSelectedLesson] = useState(0);
-  const [activeTab, setActiveTab] = useState("lesson");
+  const { courseId } = useParams<{
+    courseId: string;
+  }>();
+  const [course, setCourse] =
+    useState<Course | null>(null);
+  const [progress, setProgress] =
+    useState<CourseProgress | null>(null);
+  const [isLoading, setIsLoading] =
+    useState(true);
+  const [selectedModule, setSelectedModule] =
+    useState(0);
+  const [selectedLesson, setSelectedLesson] =
+    useState(0);
+  const [activeTab, setActiveTab] =
+    useState("lesson");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -27,21 +57,33 @@ const CourseDetail: React.FC = () => {
 
       setIsLoading(true);
       try {
-        const [courseResponse, progressResponse] = await Promise.all([getCourse(courseId), getProgress(courseId)]);
+        const [courseResponse, progressResponse] =
+          await Promise.all([
+            getCourse(courseId),
+            getProgress(courseId),
+          ]);
 
-        if (courseResponse.success && progressResponse.success) {
+        if (
+          courseResponse.success &&
+          progressResponse.success
+        ) {
           setCourse(courseResponse.data);
           setProgress(progressResponse.data);
 
           // Set selected module and lesson from progress
-          setSelectedModule(progressResponse.data.currentModule);
-          setSelectedLesson(progressResponse.data.currentLesson);
+          setSelectedModule(
+            progressResponse.data.currentModule
+          );
+          setSelectedLesson(
+            progressResponse.data.currentLesson
+          );
         }
       } catch (error) {
         toast({
           variant: "destructive",
           title: "Error loading course",
-          description: "Could not load the course. Please try again later.",
+          description:
+            "Could not load the course. Please try again later.",
         });
       } finally {
         setIsLoading(false);
@@ -51,25 +93,123 @@ const CourseDetail: React.FC = () => {
     fetchCourseAndProgress();
   }, [courseId]);
 
-  const handleLessonSelect = (moduleIndex: number, lessonIndex: number) => {
+  const handleLessonSelect = (
+    moduleIndex: number,
+    lessonIndex: number
+  ) => {
     setSelectedModule(moduleIndex);
     setSelectedLesson(lessonIndex);
   };
 
-  const handleCourseUpdate = (updatedCourse: Course) => {
+  const handleCourseUpdate = (
+    updatedCourse: Course
+  ) => {
     setCourse(updatedCourse);
   };
 
   const getCurrentLesson = (): Lesson | null => {
     if (!course) return null;
 
-    const currentModule = course.modules[selectedModule];
+    const currentModule =
+      course.modules[selectedModule];
     if (!currentModule) return null;
 
-    return currentModule.lessons[selectedLesson] || null;
+    const lesson =
+      currentModule.lessons[selectedLesson] ||
+      null;
+
+    // Adapt the lesson data structure from backend to frontend
+    if (lesson && lesson.aiContent) {
+      return {
+        ...lesson,
+        title:
+          lesson.editedContent?.title ||
+          lesson.aiContent?.title ||
+          lesson.topic ||
+          "Untitled Lesson",
+        content:
+          lesson.editedContent?.description ||
+          lesson.aiContent?.description ||
+          "No content available",
+        learningOutcomes:
+          lesson.editedContent
+            ?.learningOutcomes ||
+          lesson.aiContent?.learningOutcomes ||
+          [],
+        keyConcepts:
+          lesson.editedContent?.keyConcepts ||
+          lesson.aiContent?.keyConcepts ||
+          [],
+        activities:
+          lesson.editedContent?.activities ||
+          lesson.aiContent?.activities ||
+          [],
+        resources: lesson.resources || [], // Default empty array
+      };
+    }
+
+    return lesson;
   };
 
   const currentLesson = getCurrentLesson();
+
+  const generateLessonContent = async (
+    lessonTopic: string
+  ) => {
+    if (!course || !courseId) return;
+
+    setIsLoading(true);
+    try {
+      const response =
+        await generateLessonContentAPI({
+          topic: lessonTopic,
+          difficulty: course.difficulty,
+        });
+
+      if (response.success) {
+        // Update the current lesson with generated content
+        const updatedCourse = { ...course };
+        const currentModule =
+          updatedCourse.modules[selectedModule];
+        const currentLessonData =
+          currentModule.lessons[selectedLesson];
+
+        // Add AI-generated content to the lesson
+        currentLessonData.aiContent = {
+          title: response.data.title,
+          description: response.data.description,
+          learningOutcomes:
+            response.data.learningOutcomes,
+          keyConcepts: response.data.keyConcepts,
+          activities: response.data.activities,
+        };
+
+        // Update the course in the database
+        const updateResponse = await updateCourse(
+          courseId,
+          updatedCourse
+        );
+
+        if (updateResponse.success) {
+          setCourse(updateResponse.data);
+          toast({
+            title: "Content generated!",
+            description:
+              "Lesson content has been generated successfully.",
+          });
+        }
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Failed to generate content",
+        description:
+          "There was an error generating the lesson content. Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -93,8 +233,12 @@ const CourseDetail: React.FC = () => {
   if (!course || !progress) {
     return (
       <div className="container py-8 text-center">
-        <h1 className="text-2xl font-bold mb-4">Course not found</h1>
-        <p className="text-muted-foreground">The requested course could not be found.</p>
+        <h1 className="text-2xl font-bold mb-4">
+          Course not found
+        </h1>
+        <p className="text-muted-foreground">
+          The requested course could not be found.
+        </p>
       </div>
     );
   }
@@ -102,16 +246,28 @@ const CourseDetail: React.FC = () => {
   return (
     <div className="container py-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <h1 className="text-2xl font-bold">{course.title}</h1>
+        <h1 className="text-2xl font-bold">
+          {course.title}
+        </h1>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
             className="flex items-center gap-1"
-            onClick={() => setActiveTab(activeTab === "edit" ? "lesson" : "edit")}
+            onClick={() =>
+              setActiveTab(
+                activeTab === "edit"
+                  ? "lesson"
+                  : "edit"
+              )
+            }
           >
-            {activeTab === "edit" ? "View Lesson" : "Edit Course"}
-            {activeTab === "edit" ? null : <Edit className="h-4 w-4 ml-1" />}
+            {activeTab === "edit"
+              ? "View Lesson"
+              : "Edit Course"}
+            {activeTab === "edit" ? null : (
+              <Edit className="h-4 w-4 ml-1" />
+            )}
           </Button>
           <Button variant="ghost" size="icon">
             <HistoryIcon className="h-4 w-4" />
@@ -119,19 +275,32 @@ const CourseDetail: React.FC = () => {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="w-full"
+      >
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="lesson">Lesson</TabsTrigger>
-          <TabsTrigger value="edit">Edit Course</TabsTrigger>
+          <TabsTrigger value="lesson">
+            Lesson
+          </TabsTrigger>
+          <TabsTrigger value="edit">
+            Edit Course
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="lesson" className="mt-6">
+        <TabsContent
+          value="lesson"
+          className="mt-6"
+        >
           <div className="grid md:grid-cols-3 gap-6">
             <div className="md:col-span-1 border rounded-lg p-4">
               <LessonTree
                 course={course}
                 progress={progress}
-                onLessonSelect={handleLessonSelect}
+                onLessonSelect={
+                  handleLessonSelect
+                }
                 selectedModule={selectedModule}
                 selectedLesson={selectedLesson}
               />
@@ -141,66 +310,193 @@ const CourseDetail: React.FC = () => {
               {currentLesson ? (
                 <div className="space-y-6">
                   <div>
-                    <h2 className="text-xl font-semibold mb-1">{currentLesson.title}</h2>
+                    <h2 className="text-xl font-semibold mb-1">
+                      {currentLesson.title}
+                    </h2>
                     <div className="flex items-center text-sm text-muted-foreground">
                       <Clock className="h-4 w-4 mr-1" />
-                      <span>Estimated time: {course.modules[selectedModule].estimatedTime} minutes</span>
+                      <span>
+                        Estimated time:{" "}
+                        {
+                          course.modules[
+                            selectedModule
+                          ].estimatedTime
+                        }{" "}
+                        minutes
+                      </span>
                     </div>
                   </div>
 
-                  <div className="prose max-w-none">
-                    <p>{currentLesson.content}</p>
-                  </div>
+                  {currentLesson.content &&
+                  currentLesson.content !==
+                    "No content available" ? (
+                    <>
+                      <div className="prose max-w-none">
+                        <p>
+                          {currentLesson.content}
+                        </p>
+                      </div>
 
-                  {currentLesson.learningOutcomes && currentLesson.learningOutcomes.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-medium mb-2">Learning Outcomes</h3>
-                      <ul className="list-disc pl-5 space-y-1">
-                        {currentLesson.learningOutcomes.map((outcome, i) => (
-                          <li key={i} className="text-sm">
-                            {outcome}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                      {currentLesson.learningOutcomes &&
+                        currentLesson
+                          .learningOutcomes
+                          .length > 0 && (
+                          <div>
+                            <h3 className="text-lg font-medium mb-2">
+                              Learning Outcomes
+                            </h3>
+                            <ul className="list-disc pl-5 space-y-1">
+                              {currentLesson.learningOutcomes.map(
+                                (outcome, i) => (
+                                  <li
+                                    key={i}
+                                    className="text-sm"
+                                  >
+                                    {outcome}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          </div>
+                        )}
 
-                  {currentLesson.activities && currentLesson.activities.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-medium mb-2">Activities</h3>
-                      <ul className="list-disc pl-5 space-y-2">
-                        {currentLesson.activities.map((activity, i) => (
-                          <li key={i} className="text-sm">
-                            {activity}
-                          </li>
-                        ))}
-                      </ul>
+                      {currentLesson.keyConcepts &&
+                        currentLesson.keyConcepts
+                          .length > 0 && (
+                          <div>
+                            <h3 className="text-lg font-medium mb-2">
+                              Key Concepts
+                            </h3>
+                            <ul className="list-disc pl-5 space-y-1">
+                              {currentLesson.keyConcepts.map(
+                                (concept, i) => (
+                                  <li
+                                    key={i}
+                                    className="text-sm"
+                                  >
+                                    {concept}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          </div>
+                        )}
+
+                      {currentLesson.activities &&
+                        currentLesson.activities
+                          .length > 0 && (
+                          <div>
+                            <h3 className="text-lg font-medium mb-2">
+                              Activities
+                            </h3>
+                            <ul className="list-disc pl-5 space-y-2">
+                              {currentLesson.activities.map(
+                                (activity, i) => (
+                                  <li
+                                    key={i}
+                                    className="text-sm"
+                                  >
+                                    {activity}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          </div>
+                        )}
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-center h-64 border rounded-lg bg-muted/50">
+                      <div className="text-center space-y-4">
+                        <p className="text-muted-foreground">
+                          This lesson doesn't have
+                          content yet.
+                        </p>
+                        <Button
+                          onClick={() =>
+                            generateLessonContent(
+                              currentLesson.topic ||
+                                currentLesson.title
+                            )
+                          }
+                          disabled={isLoading}
+                        >
+                          {isLoading ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Generating
+                              Content...
+                            </>
+                          ) : (
+                            "Generate Lesson Content"
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   )}
 
                   <div className="pt-4 flex justify-between">
                     <Button
                       variant="outline"
-                      disabled={selectedLesson === 0 && selectedModule === 0}
+                      disabled={
+                        selectedLesson === 0 &&
+                        selectedModule === 0
+                      }
                       onClick={() => {
                         if (selectedLesson > 0) {
-                          handleLessonSelect(selectedModule, selectedLesson - 1);
-                        } else if (selectedModule > 0) {
-                          const prevModuleIndex = selectedModule - 1;
-                          const prevLessonIndex = course.modules[prevModuleIndex].lessons.length - 1;
-                          handleLessonSelect(prevModuleIndex, prevLessonIndex);
+                          handleLessonSelect(
+                            selectedModule,
+                            selectedLesson - 1
+                          );
+                        } else if (
+                          selectedModule > 0
+                        ) {
+                          const prevModuleIndex =
+                            selectedModule - 1;
+                          const prevLessonIndex =
+                            course.modules[
+                              prevModuleIndex
+                            ].lessons.length - 1;
+                          handleLessonSelect(
+                            prevModuleIndex,
+                            prevLessonIndex
+                          );
                         }
                       }}
                     >
                       Previous
                     </Button>
                     <Button
-                      disabled={selectedModule === course.modules.length - 1 && selectedLesson === course.modules[selectedModule].lessons.length - 1}
+                      disabled={
+                        selectedModule ===
+                          course.modules.length -
+                            1 &&
+                        selectedLesson ===
+                          course.modules[
+                            selectedModule
+                          ].lessons.length -
+                            1
+                      }
                       onClick={() => {
-                        if (selectedLesson < course.modules[selectedModule].lessons.length - 1) {
-                          handleLessonSelect(selectedModule, selectedLesson + 1);
-                        } else if (selectedModule < course.modules.length - 1) {
-                          handleLessonSelect(selectedModule + 1, 0);
+                        if (
+                          selectedLesson <
+                          course.modules[
+                            selectedModule
+                          ].lessons.length -
+                            1
+                        ) {
+                          handleLessonSelect(
+                            selectedModule,
+                            selectedLesson + 1
+                          );
+                        } else if (
+                          selectedModule <
+                          course.modules.length -
+                            1
+                        ) {
+                          handleLessonSelect(
+                            selectedModule + 1,
+                            0
+                          );
                         }
                       }}
                     >
@@ -211,7 +507,10 @@ const CourseDetail: React.FC = () => {
               ) : (
                 <div className="flex items-center justify-center h-64 border rounded-lg">
                   <div className="text-center">
-                    <p className="text-muted-foreground">Select a lesson to view content</p>
+                    <p className="text-muted-foreground">
+                      Select a lesson to view
+                      content
+                    </p>
                   </div>
                 </div>
               )}
@@ -219,8 +518,14 @@ const CourseDetail: React.FC = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="edit" className="mt-6">
-          <CourseEditor course={course} onCourseUpdate={handleCourseUpdate} />
+        <TabsContent
+          value="edit"
+          className="mt-6"
+        >
+          <CourseEditor
+            course={course}
+            onCourseUpdate={handleCourseUpdate}
+          />
         </TabsContent>
       </Tabs>
     </div>
